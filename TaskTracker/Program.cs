@@ -4,12 +4,41 @@ using TaskTracker.Models;
 using TaskTracker.Services;
 using TaskTracker.Utilities;
 
+/*
+ Entry point for the TaskTracker console application.
+
+ Responsibilities:
+ - Configure dependency injection and obtain an ITaskService instance.
+ - Read and parse user commands in a REPL-style loop.
+ - Route commands to helper functions that perform add/update/delete/list/mark operations.
+
+ Supported commands:
+ - help
+ - add "task description"
+ - update {id} "new description"
+ - delete {id}
+ - list [todo|in-progress|done]
+ - mark-todo {id}
+ - mark-in-progress {id}
+ - mark-done {id}
+ - clear
+ - exit
+
+ Notes:
+ - Input parsing and most user-facing output are delegated to Utility.
+ - This file uses top-level statements and local functions.
+*/
+
 var serviceCollection = new ServiceCollection();
 ConfigureServices(serviceCollection);
 var serviceProvider = serviceCollection.BuildServiceProvider();
+
+/* The application-level task service resolved from the DI container.
+   Provides async task operations used throughout the program. */
 var _taskService = serviceProvider.GetService<ITaskService>();
 
 DisplayWelcomeMessage();
+
 List<string> commands = [];
 while (true)
 {
@@ -82,6 +111,11 @@ while (true)
 
 }
 
+/* Validate input and call task service to set a task's status.
+   Expected forms:
+   - mark-todo {id}
+   - mark-in-progress {id}
+   - mark-done {id} */
 void SetStatusOfTask()
 {
     if (!IsUserInputValid(commands, 2))
@@ -110,6 +144,11 @@ void SetStatusOfTask()
 
 }
 
+/* Display tasks in a table. Supports optional status filter:
+   - list            => all tasks
+   - list todo       => tasks with todo status
+   - list in-progress=> tasks with in-progress status
+   - list done       => tasks with done status */
 void DisplayAllTasks()
 {
     if (commands.Count > 2)
@@ -137,6 +176,9 @@ void DisplayAllTasks()
 
     CreateTaskTable(tasks);
 }
+
+/* Render a simple console table of tasks. Colors each row depending on task status.
+   Columns: Task Id, Description, Status, Created Date, UpdateDate */
 static void CreateTaskTable(List<AppTask> tasks)
 {
     int colWidth1 = 15, colWidth2 = 35, colWidth3 = 15, colWidth4 = 15, colWidth5 = 15;
@@ -163,6 +205,9 @@ static void CreateTaskTable(List<AppTask> tasks)
            "Task Id", "Description", "Status", "CreatedDate", "UpdateDate");
     }
 }
+
+/* Update the description of an existing task.
+   Expected form: update {id} "new description" */
 void UpdateTask()
 {
     if (!IsUserInputValid(commands, 3))
@@ -190,6 +235,8 @@ void UpdateTask()
     }
 }
 
+/* Delete a task by id.
+   Expected form: delete {id} */
 void DeleteTask()
 {
     if (!IsUserInputValid(commands, 2))
@@ -216,6 +263,8 @@ void DeleteTask()
     }
 }
 
+/* Add a new task with the provided description.
+   Expected form: add "task description" */
 void AddNewTask()
 {
     if (!IsUserInputValid(commands, 2))
@@ -229,9 +278,10 @@ void AddNewTask()
         Utility.PrintInfoMessage($"Task added successfully with Id : {taskAdded.Result}");
     else
         Utility.PrintInfoMessage("Task not saved! Try Again");
-        
+
 }
 
+/* Print the list of help commands retrieved from the task service. */
 void PrintHelpCommands()
 {
     var helpCommands = _taskService?.GetAllHelpCommands();
@@ -246,12 +296,20 @@ void PrintHelpCommands()
     }
 }
 
+/* Configure application services used by this console program.
+   Currently registers ITaskService => TaskService as a singleton. */
 static void ConfigureServices(IServiceCollection services)
 {
     // Register services here
     services.AddSingleton<ITaskService, TaskService>();
 }
 
+/* Validate parsed user input based on expected token count:
+   - parameterRequired = 1 : command only
+   - parameterRequired = 2 : command + single parameter (e.g., id or description)
+   - parameterRequired = 3 : command + two parameters (e.g., id + description)
+
+   On validation failure, prints guidance to the user. */
 static bool IsUserInputValid(List<string> commands, int parameterRequired)
 {
     bool validInput = true;
@@ -291,6 +349,8 @@ static bool IsUserInputValid(List<string> commands, int parameterRequired)
     return true;
 }
 
+/* Attempt to parse the id parameter (commands[1]) into an integer.
+   On failure (id == 0) prints an error and returns (false, 0). */
 static Tuple<bool, int> IsValidIdProvided(List<string> commands, int id)
 {
     Int32.TryParse(commands[1], out id);
@@ -305,12 +365,17 @@ static Tuple<bool, int> IsValidIdProvided(List<string> commands, int id)
     return new Tuple<bool, int>(true, id);
 }
 
+/* Print the initial welcome message and a hint to type "help". */
 static void DisplayWelcomeMessage()
 {
     Utility.PrintInfoMessage("Hello, Welcome to Task Tracker!");
     Utility.PrintInfoMessage("Type \"help\" to know the set of commands");
 }
 
+/* Set the console foreground color based on the task status:
+   - todo       => Magenta
+   - done       => Green
+   - otherwise  => Yellow (for in-progress) */
 static void SetConsoleTextColor(AppTask task)
 {
     if (task.status == TaskTracker.Enums.StatusEnum.todo)
